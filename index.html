@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario Underground by samy</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #5c94fc;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            border: 2px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game constants
+        const GROUND_Y = 350;
+        const GRAVITY = 0.5;
+        const JUMP_FORCE = -12;
+        const MOVE_SPEED = 5;
+
+        // Camera
+        const camera = {
+            x: 0,
+            y: 0
+        };
+
+        // Game objects
+        const mario = {
+            x: 50,
+            y: GROUND_Y,
+            width: 32,
+            height: 32,
+            velocityY: 0,
+            isJumping: false
+        };
+
+        const platforms = [
+            { x: 0, y: GROUND_Y + 32, width: 5000, height: 50 }, // Ground
+            { x: 300, y: 250, width: 100, height: 20 },
+            { x: 500, y: 200, width: 100, height: 20 },
+            { x: 700, y: 300, width: 100, height: 20 },
+            { x: 900, y: 250, width: 100, height: 20 },
+            { x: 1100, y: 200, width: 100, height: 20 },
+            { x: 1300, y: 300, width: 100, height: 20 },
+            // Underground platforms
+            { x: 1600, y: 500, width: 1000, height: 20 },
+            { x: 1800, y: 450, width: 100, height: 20 },
+            { x: 2000, y: 400, width: 100, height: 20 },
+            { x: 2200, y: 350, width: 100, height: 20 },
+        ];
+
+        const coins = [
+            { x: 350, y: 200, width: 20, height: 20, collected: false },
+            { x: 550, y: 150, width: 20, height: 20, collected: false },
+            { x: 750, y: 250, width: 20, height: 20, collected: false },
+            { x: 950, y: 200, width: 20, height: 20, collected: false },
+            { x: 1150, y: 150, width: 20, height: 20, collected: false },
+            { x: 1350, y: 250, width: 20, height: 20, collected: false },
+            // Underground coins
+            { x: 1700, y: 450, width: 20, height: 20, collected: false },
+            { x: 1900, y: 400, width: 20, height: 20, collected: false },
+            { x: 2100, y: 350, width: 20, height: 20, collected: false },
+        ];
+
+        const enemies = [
+            { x: 400, y: GROUND_Y, width: 32, height: 32, direction: -1 },
+            { x: 800, y: GROUND_Y, width: 32, height: 32, direction: -1 },
+            { x: 1200, y: GROUND_Y, width: 32, height: 32, direction: -1 },
+            // Underground enemies
+            { x: 1800, y: 468, width: 32, height: 32, direction: -1 },
+            { x: 2100, y: 468, width: 32, height: 32, direction: -1 },
+        ];
+
+        const pipes = [
+            { x: 600, y: GROUND_Y - 64, width: 64, height: 64, destination: { x: 1600, y: 450 }, direction: 'down' },
+            { x: 2500, y: 436, width: 64, height: 64, destination: { x: 1400, y: GROUND_Y }, direction: 'up' },
+        ];
+
+        let score = 0;
+        let isUnderground = false;
+
+        // Keyboard controls
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        function update() {
+            // Mario movement
+            if (keys['ArrowLeft']) mario.x -= MOVE_SPEED;
+            if (keys['ArrowRight']) mario.x += MOVE_SPEED;
+            if (keys['Space'] && !mario.isJumping) {
+                mario.velocityY = JUMP_FORCE;
+                mario.isJumping = true;
+            }
+
+            // Apply gravity
+            mario.velocityY += GRAVITY;
+            mario.y += mario.velocityY;
+
+            // Platform collision
+            let onGround = false;
+            platforms.forEach(platform => {
+                if (mario.x < platform.x + platform.width &&
+                    mario.x + mario.width > platform.x &&
+                    mario.y + mario.height > platform.y &&
+                    mario.y < platform.y + platform.height) {
+                    if (mario.velocityY > 0) {
+                        mario.y = platform.y - mario.height;
+                        mario.velocityY = 0;
+                        mario.isJumping = false;
+                        onGround = true;
+                    } else if (mario.velocityY < 0) {
+                        mario.y = platform.y + platform.height;
+                        mario.velocityY = 0;
+                    }
+                }
+            });
+
+            if (!onGround) {
+                mario.isJumping = true;
+            }
+
+            // Coin collection
+            coins.forEach(coin => {
+                if (!coin.collected &&
+                    mario.x < coin.x + coin.width &&
+                    mario.x + mario.width > coin.x &&
+                    mario.y < coin.y + coin.height &&
+                    mario.y + mario.height > coin.y) {
+                    coin.collected = true;
+                    score += 10;
+                }
+            });
+
+            // Enemy movement and collision
+            enemies.forEach(enemy => {
+                enemy.x += enemy.direction * 2;
+                if (enemy.x <= enemy.startX - 100 || enemy.x >= enemy.startX + 100) {
+                    enemy.direction *= -1;
+                }
+
+                if (mario.x < enemy.x + enemy.width &&
+                    mario.x + mario.width > enemy.x &&
+                    mario.y < enemy.y + enemy.height &&
+                    mario.y + mario.height > enemy.y) {
+                    if (mario.velocityY > 0 && mario.y + mario.height < enemy.y + enemy.height / 2) {
+                        // Mario jumps on the enemy
+                        enemies = enemies.filter(e => e !== enemy);
+                        mario.velocityY = JUMP_FORCE / 2;
+                        score += 100;
+                    } else {
+                        // Mario collides with the enemy
+                        resetGame();
+                    }
+                }
+            });
+
+            // Pipe teleportation
+            pipes.forEach(pipe => {
+                if (mario.x < pipe.x + pipe.width &&
+                    mario.x + mario.width > pipe.x &&
+                    mario.y + mario.height > pipe.y &&
+                    mario.y < pipe.y + pipe.height) {
+                    if ((pipe.direction === 'down' && keys['ArrowDown']) || (pipe.direction === 'up' && keys['ArrowUp'])) {
+                        mario.x = pipe.destination.x;
+                        mario.y = pipe.destination.y - mario.height;
+                        isUnderground = !isUnderground;
+                    }
+                }
+            });
+
+            // Update camera position
+            camera.x = mario.x - canvas.width / 2;
+            camera.y = Math.max(0, mario.y - canvas.height / 2);
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw background
+            ctx.fillStyle = isUnderground ? '#600' : '#5c94fc';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            // Draw ground and platforms
+            ctx.fillStyle = '#c84';
+            platforms.forEach(platform => {
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            });
+
+            // Draw pipes
+            pipes.forEach(pipe => {
+                ctx.fillStyle = '#0c0';
+                ctx.fillRect(pipe.x, pipe.y, pipe.width, pipe.height);
+                
+                // Draw arrow indicators
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                if (pipe.direction === 'down') {
+                    ctx.moveTo(pipe.x + 16, pipe.y + 16);
+                    ctx.lineTo(pipe.x + pipe.width - 16, pipe.y + 16);
+                    ctx.lineTo(pipe.x + pipe.width / 2, pipe.y + pipe.height - 16);
+                } else {
+                    ctx.moveTo(pipe.x + 16, pipe.y + pipe.height - 16);
+                    ctx.lineTo(pipe.x + pipe.width - 16, pipe.y + pipe.height - 16);
+                    ctx.lineTo(pipe.x + pipe.width / 2, pipe.y + 16);
+                }
+                ctx.fill();
+            });
+
+            // Draw Mario
+            ctx.fillStyle = 'red';
+            ctx.fillRect(mario.x, mario.y, mario.width, mario.height);
+
+            // Draw coins
+            ctx.fillStyle = 'gold';
+            coins.forEach(coin => {
+                if (!coin.collected) {
+                    ctx.beginPath();
+                    ctx.arc(coin.x + coin.width / 2, coin.y + coin.height / 2, coin.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw enemies
+            ctx.fillStyle = '#a00';
+            enemies.forEach(enemy => {
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            });
+
+            ctx.restore();
+
+            // Draw score
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('Score: ' + score, 10, 30);
+
+            // Draw instructions
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText('Use arrow keys to move, Space to jump', 10, canvas.height - 40);
+            ctx.fillText('Press Down arrow near green pipes to go underground', 10, canvas.height - 20);
+        }
+
+        function resetGame() {
+            mario.x = 50;
+            mario.y = GROUND_Y;
+            mario.velocityY = 0;
+            mario.isJumping = false;
+            score = 0;
+            isUnderground = false;
+            coins.forEach(coin => coin.collected = false);
+            enemies.forEach(enemy => {
+                enemy.x = enemy.startX;
+                enemy.direction = -1;
+            });
+            camera.x = 0;
+            camera.y = 0;
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize enemy start positions
+        enemies.forEach(enemy => enemy.startX = enemy.x);
+
+        gameLoop();
+    </script>
+</body>
+</html>
